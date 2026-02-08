@@ -5,7 +5,7 @@ import random
 import xml.dom.minidom
 
 # replace filepath with the absolute path of the OSM file you have downloaded
-doc = xml.dom.minidom.parse("/Users/manish/Work/osm2maya/indiranagar.osm")
+doc = xml.dom.minidom.parse("/Users/filename.osm")
 
 
 # building:levels

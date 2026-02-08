@@ -4,9 +4,13 @@ import random
 
 import xml.dom.minidom
 
-# replace filepath with the absolute path of the OSM file you have downloaded
-doc = xml.dom.minidom.parse("/Users/filename.osm")
+import os
 
+# replace filepath with the absolute path of the OSM file you have downloaded
+home_directory = os.path.expanduser("~")
+print('Searching for map.osm in ' + home_directory)
+
+doc = xml.dom.minidom.parse(home_directory + "/Downloads/map.osm")
 
 # building:levels
 
@@ -27,9 +31,7 @@ for el in all_ways:
 
             if 'k' in ch.attributes.keys() and 'building' ==  ch.attributes['k'].value:
                 buildings.append(el)
-    
                 break
-
 
 nodes = doc.getElementsByTagName("node")
 id_to_tuple = {}
@@ -94,7 +96,6 @@ for b in buildings:
 
     all_buildings.append((lst, level, building_height, building_name, building_roof))
 
-
 print(all_buildings[0])
 
 all_buildings = sorted(all_buildings)
@@ -104,17 +105,16 @@ sz = len(all_buildings)
 start_lon = float(all_buildings[sz//2][0][0][0])
 start_lat = float(all_buildings[sz//2][0][0][1])
 
-
 print(all_buildings[0])
-
 
 def get_xy(lon, lat):
     lon = float(lon)
     lat = float(lat)
     mul = 111.321 * 1000 # meters
+    #mul = 111.321 * 1000 * 1000 #mm
     diff_lon = lon - start_lon
     diff_lat = lat - start_lat
-    return (diff_lon * mul, diff_lat*mul)
+    return (diff_lon * mul, diff_lat*mul * -1)
      
 buildings_xy = []
 
@@ -124,12 +124,11 @@ for lst in all_buildings:
         tmp.append(get_xy(i[0], i[1]))
         
     # height from levels
-    # h = lst[1]
-	h = lst[2]
+    # h = lst[1] * -1
+    h = lst[2]
     buildings_xy.append((tmp, h))
 
 print(buildings_xy[0])
-
 
 
 # Polygons ready, now use it below
@@ -138,8 +137,6 @@ print(buildings_xy[0])
 #if len(cubeList) > 0:
 #    cmds.delete(cubeList)
    
-   
-
 all_poly = []
 cnt = 0
 
@@ -176,14 +173,15 @@ for lst in buildings_xy:
     ob = bpy.data.objects.new("Obz"+str(cnt), me)
     ob.modifiers.new("Solidify", type='SOLIDIFY')
     ob.modifiers["Solidify"].thickness = h/10
-	osm_collection.objects.link(ob)
+    osm_collection.objects.link(ob)
 
-	# [start] Adding Glow to each object created, comment it out if not needed    
+    # [start] Adding Glow to each object created, comment it out if not needed    
     matName = "Mater"+str(cnt)
     skymaterial = bpy.data.materials.new(matName)
     ob.active_material = skymaterial 
     skymaterial.use_nodes = True
     nodes = skymaterial.node_tree.nodes
+    
     nodes.clear()
 
 
@@ -224,4 +222,3 @@ for ob in obs_list:
     print("Linking ", cnt)
     cnt+=1
     bpy.context.scene.collection.objects.link(ob)
-

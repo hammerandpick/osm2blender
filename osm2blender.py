@@ -10,8 +10,13 @@ doc = xml.dom.minidom.parse("/Users/filename.osm")
 
 # building:levels
 
-
 all_ways = doc.getElementsByTagName("way")
+
+#prepare collection
+osm_collection = bpy.data.collections.new("Import-Collection")
+
+# add collection to scene
+bpy.context.scene.collection.children.link(osm_collection)
 
 buildings = []
 
@@ -54,10 +59,40 @@ for b in buildings:
                     level = int(tag.attributes['v'].value)
                 except:
                     level = 1
+            if tag.attributes['k'].value == 'alt_name':
+                try:
+                    building_name = tag.attributes['v'].value
+                except:
+                    building_name = "unknown"
+            if tag.attributes['k'].value == 'roof:shape':
+                try:
+                    building_roof = tag.attributes['v'].value
+                except:
+                    building_roof = "flat"
+            if tag.attributes['k'].value == 'roof:levels':
+                try:
+                    building_roof_levels = int(tag.attributes['v'].value)
+                except:
+                    building_roof_levels = 1
+            if tag.attributes['k'].value == 'height':
+                try:
+                    building_height = int(tag.attributes['v'].value)
+                except:
+                    building_height = level * 3
     
-     
+    if not 'building_name' in locals():
+        building_name = "unknown"
+
+    if not 'building_roof' in locals():
+        building_name = "flat"
+        
+    if not 'building_roof' in locals():
+        building_roof = "flat"
     
-    all_buildings.append((lst, level))
+    if not 'building_height' in locals():
+        building_height = level * 3
+
+    all_buildings.append((lst, level, building_height, building_name, building_roof))
 
 
 print(all_buildings[0])
@@ -88,8 +123,9 @@ for lst in all_buildings:
     for i in lst[0]:
         tmp.append(get_xy(i[0], i[1]))
         
-    # height froom levels
-    h = lst[1]
+    # height from levels
+    # h = lst[1]
+	h = lst[2]
     buildings_xy.append((tmp, h))
 
 print(buildings_xy[0])
@@ -140,6 +176,7 @@ for lst in buildings_xy:
     ob = bpy.data.objects.new("Obz"+str(cnt), me)
     ob.modifiers.new("Solidify", type='SOLIDIFY')
     ob.modifiers["Solidify"].thickness = h/10
+	osm_collection.objects.link(ob)
 
 	# [start] Adding Glow to each object created, comment it out if not needed    
     matName = "Mater"+str(cnt)

@@ -114,7 +114,7 @@ def get_xy(lon, lat):
     #mul = 111.321 * 1000 * 1000 #mm
     diff_lon = lon - start_lon
     diff_lat = lat - start_lat
-    return (diff_lon * mul, diff_lat*mul * -1)
+    return (diff_lon * mul, diff_lat * mul * -1)
      
 buildings_xy = []
 
@@ -123,10 +123,8 @@ for lst in all_buildings:
     for i in lst[0]:
         tmp.append(get_xy(i[0], i[1]))
         
-    # height from levels
-    # h = lst[1] * -1
-    h = lst[2]
-    buildings_xy.append((tmp, h))
+    # height from previous data 
+    buildings_xy.append((tmp, lst[2], lst[3], lst[4]))
 
 print(buildings_xy[0])
 
@@ -170,10 +168,21 @@ for lst in buildings_xy:
     me = bpy.data.meshes.new("")
     bm.to_mesh(me)
     
-    ob = bpy.data.objects.new("Obz"+str(cnt), me)
+    #create a new collection for each building
+    
+    building_collection = osm_collection
+    
+    if lst[2] in bpy.data.collections:
+        building_collection = bpy.data.collections[lst[2]]
+    else:
+        building_collection = bpy.data.collections.new(lst[2])
+        osm_collection.children.link(building_collection)
+    
+    ob = bpy.data.objects.new("Obz"+str(cnt)+"_"+lst[2], me)
     ob.modifiers.new("Solidify", type='SOLIDIFY')
     ob.modifiers["Solidify"].thickness = h/10
-    osm_collection.objects.link(ob)
+    building_collection.objects.link(ob)
+
 
     # [start] Adding Glow to each object created, comment it out if not needed    
     matName = "Mater"+str(cnt)

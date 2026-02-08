@@ -94,7 +94,7 @@ for b in buildings:
     if not 'building_height' in locals():
         building_height = level * 3
 
-    all_buildings.append((lst, level, building_height, building_name, building_roof))
+    all_buildings.append((lst, level, building_height * -1, building_name, building_roof))
 
 print(all_buildings[0])
 

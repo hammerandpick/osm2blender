@@ -228,7 +228,7 @@ for b in buildings:
         z = 0
         y /= config['scale_y']
         tmp.append((x,y,z))
-    h = buildings[b]['height']
+    h = buildings[b]['height'] * config['scale_z']
 
     verts = tmp
     bm = bmesh.new()

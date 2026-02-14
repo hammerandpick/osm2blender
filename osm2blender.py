@@ -1,3 +1,4 @@
+from logging import log
 import bpy, bmesh
 
 import random
@@ -22,16 +23,31 @@ osm_collection = bpy.data.collections.new("Import-Collection")
 # add collection to scene
 bpy.context.scene.collection.children.link(osm_collection)
 
-buildings = []
+buildings = {}
+id = 0
+latitude = {'minVal':0.0, 'maxVal':0.0, 'startVal':0.0}
+longitude = {'minVal':0.0, 'maxVal':0.0, 'startVal':0.0}
 
 for el in all_ways:
     for ch in el.childNodes:
-    
         if ch.attributes:
-
             if 'k' in ch.attributes.keys() and 'building' ==  ch.attributes['k'].value:
-                buildings.append(el)
-                break
+                building_properties = {}
+                building_properties['element'] = el
+                building_properties['nodes']=[]
+                building_properties['name'] = "unknown"
+                building_properties['street'] = "unknown"
+                building_properties['roof'] = "flat"
+                building_properties['roof_levels'] = 1
+                building_properties['height'] = 3.0
+                building_properties['levels'] = 1
+                building_properties['lat'] = 1.0
+                building_properties['lon'] = 1.0
+                buildings['id_'+str(id)] = building_properties
+                break 
+    id += 1
+
+print("Total buildings found: ", len(buildings))
 
 nodes = doc.getElementsByTagName("node")
 id_to_tuple = {}
@@ -40,117 +56,124 @@ for node in nodes:
     if 'lon' in node.attributes.keys():
         (lon, lat) = (node.attributes['lon'].value, node.attributes['lat'].value)
         id_to_tuple[id_val] = (lon, lat)
-        
 
-all_buildings = []
+def get_lat_lon_extremes():
+    global latitude, longitude, buildings
+    for b in buildings:
+        lat = float(buildings[b]['lat'])
+        lon = float(buildings[b]['lon'])
+        if latitude['minVal'] == 0 or lat < latitude['minVal']:
+            latitude['minVal'] = lat
+        if latitude['maxVal'] == 0 or lat > latitude['maxVal']:
+            latitude['maxVal'] = lat
+        if longitude['minVal'] == 0 or lon < longitude['minVal']:
+            longitude['minVal'] = lon
+        if longitude['maxVal'] == 0 or lon > longitude['maxVal']:
+            longitude['maxVal'] = lon
+    
+    latitude['startVal'] = (latitude['maxVal'] + latitude['minVal'])/2
+    longitude['startVal'] = (longitude['maxVal'] + longitude['minVal'])/2
+    print("Latitude extremes: ", latitude)
+    print("Longitude extremes: ", longitude)
+
+
+#all_buildings = []
 
 for b in buildings:
-    lst = []
-    nds = b.getElementsByTagName('nd')
+    nds = buildings[b]['element'].getElementsByTagName('nd')
     for ch in nds:
         if ch.tagName == 'nd':
             node_id = ch.attributes['ref'].value
-            lst.append(id_to_tuple[node_id])
-    
-    tags = b.getElementsByTagName('tag')
-    level = 1
+            buildings[b]['nodes'].append(id_to_tuple[node_id])
+
+    tags = buildings[b]['element'].getElementsByTagName('tag')
+    buildings[b]['levels'] = 1
     for tag in tags:
         if tag.tagName == 'tag':
             if tag.attributes['k'].value == 'building:levels':
                 try:
-                    level = int(tag.attributes['v'].value)
+                    buildings[b]['levels'] = int(tag.attributes['v'].value)
                 except:
-                    level = 1
+                    buildings[b]['levels'] = 1
             if tag.attributes['k'].value == 'alt_name':
                 try:
-                    building_name = tag.attributes['v'].value
+                    buildings[b]['name'] = tag.attributes['v'].value
                 except:
-                    building_name = "unknown"
+                    buildings[b]['name'] = "unknown"
+            if tag.attributes['k'].value == 'name':
+                try:
+                    buildings[b]['name'] = tag.attributes['v'].value
+                except:
+                    buildings[b]['name'] = "unknown"
+            if tag.attributes['k'].value == 'addr:street':
+                try:
+                    buildings[b]['street'] = tag.attributes['v'].value
+                except:
+                    buildings[b]['street'] = "unknown"
             if tag.attributes['k'].value == 'roof:shape':
                 try:
-                    building_roof = tag.attributes['v'].value
+                    buildings[b]['roof'] = tag.attributes['v'].value
                 except:
-                    building_roof = "flat"
+                    buildings[b]['roof'] = "flat"
             if tag.attributes['k'].value == 'roof:levels':
                 try:
-                    building_roof_levels = int(tag.attributes['v'].value)
+                    buildings[b]['roof_levels'] = int(tag.attributes['v'].value)
                 except:
-                    building_roof_levels = 1
+                    buildings[b]['roof_levels'] = 1
             if tag.attributes['k'].value == 'height':
                 try:
-                    building_height = int(tag.attributes['v'].value)
+                    buildings[b]['height'] = int(tag.attributes['v'].value)
                 except:
-                    building_height = level * 3
+                    buildings[b]['height'] = buildings[b]['levels'] * 3
     
     if not 'building_name' in locals():
-        building_name = "unknown"
+        building_name = buildings[b]['name']
 
     if not 'building_roof' in locals():
-        building_name = "flat"
+        building_name = buildings[b]['roof']
         
     if not 'building_roof' in locals():
-        building_roof = "flat"
+        building_roof = buildings[b]['roof']
     
     if not 'building_height' in locals():
-        building_height = level * 3
+        building_height = buildings[b]['levels'] * 3
 
-    all_buildings.append((lst, level, building_height * -1, building_name, building_roof))
+    buildings[b]['lat'] = buildings[b]['nodes'][0][1]
+    buildings[b]['lon'] = buildings[b]['nodes'][0][0]
 
-print(all_buildings[0])
+    
+#buildings=sorted(buildings.items(), key=lambda x: x[1]['lon'], reverse=True)
 
-all_buildings = sorted(all_buildings)
-
-sz = len(all_buildings)
-
-start_lon = float(all_buildings[sz//2][0][0][0])
-start_lat = float(all_buildings[sz//2][0][0][1])
-
-print(all_buildings[0])
+get_lat_lon_extremes()
 
 def get_xy(lon, lat):
+    global latitude, longitude
     lon = float(lon)
     lat = float(lat)
     mul = 111.321 * 1000 # meters
     #mul = 111.321 * 1000 * 1000 #mm
-    diff_lon = lon - start_lon
-    diff_lat = lat - start_lat
+    diff_lon = lon - longitude['startVal']
+    diff_lat = lat - latitude['startVal']
     return (diff_lon * mul, diff_lat * mul * -1)
      
-buildings_xy = []
-
-for lst in all_buildings:
-    tmp = [] 
-    for i in lst[0]:
-        tmp.append(get_xy(i[0], i[1]))
-        
-    # height from previous data 
-    buildings_xy.append((tmp, lst[2], lst[3], lst[4]))
-
-print(buildings_xy[0])
-
-
 # Polygons ready, now use it below
 
-#cubeList  = cmds.ls('myCube*')
-#if len(cubeList) > 0:
-#    cmds.delete(cubeList)
-   
 all_poly = []
 cnt = 0
 
 obs_list = []
 
-for lst in buildings_xy:
-    cnt += 1
+for b in buildings:
+    cnt+=1
     tmp = []
 
-    for i in lst[0]:
-        (x,y) = i
+    for i in buildings[b]['nodes']:
+        (x,y) = get_xy(i[0], i[1])
         x/=-100
         z = 0
         y /= 100
         tmp.append((x,y,z))
-    h = lst[1]
+    h = buildings[b]['height']
 
     verts = tmp
     bm = bmesh.new()
@@ -172,17 +195,16 @@ for lst in buildings_xy:
     
     building_collection = osm_collection
     
-    if lst[2] in bpy.data.collections:
-        building_collection = bpy.data.collections[lst[2]]
+    if buildings[b]['street'] in bpy.data.collections:
+        building_collection = bpy.data.collections[buildings[b]['street']]
     else:
-        building_collection = bpy.data.collections.new(lst[2])
+        building_collection = bpy.data.collections.new(buildings[b]['street'])
         osm_collection.children.link(building_collection)
     
-    ob = bpy.data.objects.new("Obz"+str(cnt)+"_"+lst[2], me)
+    ob = bpy.data.objects.new("Obj"+str(b), me)
     ob.modifiers.new("Solidify", type='SOLIDIFY')
     ob.modifiers["Solidify"].thickness = h/10
     building_collection.objects.link(ob)
-
 
     # [start] Adding Glow to each object created, comment it out if not needed    
     matName = "Mater"+str(cnt)
@@ -222,12 +244,13 @@ for lst in buildings_xy:
 
     copy = ob.copy()
     obs_list.append(copy)
-    print("Done", cnt)
 #    if cnt > 7000:
 #        break
     
 cnt = 1
 for ob in obs_list:
-    print("Linking ", cnt)
+    #print("Linking ", cnt)
     cnt+=1
     bpy.context.scene.collection.objects.link(ob)
+
+print ("Finished processing ", cnt, " buildings")

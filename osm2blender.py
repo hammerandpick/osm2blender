@@ -11,6 +11,15 @@ import os
 home_directory = os.path.expanduser("~")
 print('Searching for map.osm in ' + home_directory)
 
+config={
+    "extrude_not_solidify": True, # if true, the script will use
+    "scale_x":-1.0, # scale factor for x axis, default is 1.0
+    "scale_y":1.0, # scale factor for y axis, default is 1.0
+    "scale_z":1.0, # scale factor for z axis, default is 1.0
+    "base_height": 4.0, # base height for buildings if not specified, default is 3.0 meters
+    "level_height": 3.0, # height per level for buildings if not specified, default is 3.0 meters
+    }
+
 doc = xml.dom.minidom.parse(home_directory + "/Downloads/map.osm")
 
 # building:levels
@@ -42,8 +51,9 @@ for el in all_ways:
                 building_properties['addr:street'] = "unknown"
                 building_properties['addr:housenumber'] = "unknown"
                 building_properties['roof'] = "flat"
-                building_properties['roof_levels'] = 1
-                building_properties['height'] = 3.0
+                building_properties['roof_levels'] = 0
+                building_properties['roof_height'] = 0.0
+                building_properties['height'] = config['base_height'] * -1.0
                 building_properties['levels'] = 1
                 building_properties['lat'] = 1.0
                 building_properties['lon'] = 1.0
@@ -129,23 +139,19 @@ for b in buildings:
                     buildings[b]['roof_levels'] = int(tag.attributes['v'].value)
                 except:
                     buildings[b]['roof_levels'] = 1
+            if tag.attributes['k'].value == 'roof:height':
+                try:
+                    buildings[b]['roof_height'] = int(tag.attributes['v'].value)
+                except:
+                    pass
             if tag.attributes['k'].value == 'height':
                 try:
                     buildings[b]['height'] = int(tag.attributes['v'].value)
                 except:
-                    buildings[b]['height'] = buildings[b]['levels'] * 3
+                    pass
     
-    if not 'building_name' in locals():
-        building_name = buildings[b]['name']
-
-    if not 'building_roof' in locals():
-        building_name = buildings[b]['roof']
-        
-    if not 'building_roof' in locals():
-        building_roof = buildings[b]['roof']
-    
-    if not 'building_height' in locals():
-        building_height = buildings[b]['levels'] * 3
+    if buildings[b]['height'] <= 0.0:
+        buildings[b]['height'] = max(buildings[b]['levels'] * config['level_height'],config['base_height']) # default height if not specified, 3m per level, min 2.5m.
 
     buildings[b]['lat'] = buildings[b]['nodes'][0][1]
     buildings[b]['lon'] = buildings[b]['nodes'][0][0]
@@ -157,9 +163,10 @@ get_lat_lon_extremes()
 
 def get_xy(lon, lat):
     global latitude, longitude
+    earth_radius = 6378137.0 # in meters
     lon = float(lon)
     lat = float(lat)
-    mul = 111.321 * 1000 # meters
+    mul = 111321 # meters
     #mul = 111.321 * 1000 * 1000 #mm
     diff_lon = lon - longitude['startVal']
     diff_lat = lat - latitude['startVal']
@@ -167,20 +174,59 @@ def get_xy(lon, lat):
      
 # Polygons ready, now use it below
 
-all_poly = []
-cnt = 0
 
 obs_list = []
 
+def colour_building(number=0, mode="id"):
+    # mode can be "id", "height" or "random"
+    # for "id" mode, the color will be determined by the building's id, for "height" mode, the color will be determined by the building's height, for "random" mode, the color will be random
+    r = g = b = 0
+    if mode == "id":
+        if number % 3 == 0:
+            r = 1.0
+            g = 0
+            b = 0
+        elif number % 3 == 1:
+            r = 0
+            g = 0.5
+            b = 1
+        elif number % 3 == 2:
+            r = 0.5
+            g = 0
+            b = 0.5
+    elif mode == "height":
+        if number < 5:
+            r = 0.5
+            g = 0.5
+            b = 1
+        elif number < 10:
+            r = 0.5
+            g = 1
+            b = 0.5
+        elif number < 15:
+            r = 1
+            g = 0.5
+            b = 0.5
+        else:
+            r = 1
+            g = 1
+            b = 0.5
+    elif mode == "random":
+        r = random.random()
+        g = random.random()
+        b = random.random()
+    return (r,g,b,1)
+
+cnt = 0
 for b in buildings:
     cnt+=1
     tmp = []
 
     for i in buildings[b]['nodes']:
         (x,y) = get_xy(i[0], i[1])
-        x/=-100
+        x/= config['scale_x']
         z = 0
-        y /= 100
+        y /= config['scale_y']
         tmp.append((x,y,z))
     h = buildings[b]['height']
 
@@ -188,7 +234,7 @@ for b in buildings:
     bm = bmesh.new()
     for v in verts:
         bm.verts.new((v[0], v[1], 1))
-    bm.faces.new(bm.verts)
+    bottom = bm.faces.new(bm.verts)
     
     bm.normal_update()
     
@@ -198,7 +244,18 @@ for b in buildings:
             f.normal_flip()    
     
     me = bpy.data.meshes.new("")
+    
+    if(config['extrude_not_solidify'] == True):
+        # next we create top via extrude operator, note it doesn't move the new face
+        # we make our 1 face into a list so it can be accepted to geom
+        top = bmesh.ops.extrude_face_region(bm, geom=[bottom])
+
+        # here we move all vertices returned by the previous extrusion
+        # filter the "geom" list for vertices using list constructor
+        bmesh.ops.translate(bm, vec=(0,0,h), verts=[v for v in top["geom"] if isinstance(v,bmesh.types.BMVert)])
+    
     bm.to_mesh(me)
+
     
     #create a new collection for each new street, if the building has no street, add it to the unknown collection
     
@@ -211,13 +268,14 @@ for b in buildings:
         osm_collection.children.link(building_collection)
     
     ob = bpy.data.objects.new("Nr_"+buildings[b]['addr:housenumber']+"_"+buildings[b]['name'], me)
-    ob.modifiers.new("Solidify", type='SOLIDIFY')
-    ob.modifiers["Solidify"].thickness = h/10
+    if(config['extrude_not_solidify'] == False):
+        ob.modifiers.new("Solidify", type='SOLIDIFY')
+        ob.modifiers["Solidify"].thickness = h/10
     
     building_collection.objects.link(ob)
     
     # check if building has a name an add it to a custom collection if it has one, otherwise add it to the unknown collection
-    if buildings[b]['name'] != "unknown":
+    if buildings[b]['name'] != "unknown" and buildings[b]['name'].isnumeric() == False:
         if buildings[b]['name'] in bpy.data.collections:
             building_collection = bpy.data.collections[buildings[b]['name']]
         else:
@@ -230,28 +288,13 @@ for b in buildings:
     skymaterial = bpy.data.materials.new(matName)
     ob.active_material = skymaterial 
     nodes = skymaterial.node_tree.nodes
-    
     nodes.clear()
-
 
     # Create needed Nodes
     nodeOut = nodes.new(type='ShaderNodeOutputMaterial')
     nodeEmission = nodes.new(type='ShaderNodeEmission')
-    r = g = b = 0
-    if cnt % 3 == 0:
-        r = 1.0
-        g = 0
-        b = 0
-    elif cnt % 3 == 1:
-        r = 0
-        g = 0.5
-        b = 1
-    elif cnt % 3 == 2:
-        r = 0.5
-        g = 0
-        b = 0.5
-        
-    nodeEmission.inputs['Color'].default_value = (r,g,b,1)
+    
+    nodeEmission.inputs['Color'].default_value = colour_building(cnt, mode="random")
     nodeEmission.inputs['Strength'].default_value = 4
     
     # Link them together

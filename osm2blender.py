@@ -19,9 +19,12 @@ all_ways = doc.getElementsByTagName("way")
 
 #prepare collection
 osm_collection = bpy.data.collections.new("Import-Collection")
+osm_named_buildings_collection = bpy.data.collections.new("Named-Buildings")
 
 # add collection to scene
 bpy.context.scene.collection.children.link(osm_collection)
+bpy.context.scene.collection.children.link(osm_named_buildings_collection)
+
 
 buildings = {}
 id = 0
@@ -36,7 +39,8 @@ for el in all_ways:
                 building_properties['element'] = el
                 building_properties['nodes']=[]
                 building_properties['name'] = "unknown"
-                building_properties['street'] = "unknown"
+                building_properties['addr:street'] = "unknown"
+                building_properties['addr:housenumber'] = "unknown"
                 building_properties['roof'] = "flat"
                 building_properties['roof_levels'] = 1
                 building_properties['height'] = 3.0
@@ -107,9 +111,14 @@ for b in buildings:
                     buildings[b]['name'] = "unknown"
             if tag.attributes['k'].value == 'addr:street':
                 try:
-                    buildings[b]['street'] = tag.attributes['v'].value
+                    buildings[b]['addr:street'] = tag.attributes['v'].value
                 except:
-                    buildings[b]['street'] = "unknown"
+                    buildings[b]['addr:street'] = "unknown"
+            if tag.attributes['k'].value == 'addr:housenumber':
+                try:
+                    buildings[b]['addr:housenumber'] = tag.attributes['v'].value
+                except:
+                    buildings[b]['addr:housenumber'] = "unknown"
             if tag.attributes['k'].value == 'roof:shape':
                 try:
                     buildings[b]['roof'] = tag.attributes['v'].value
@@ -191,26 +200,35 @@ for b in buildings:
     me = bpy.data.meshes.new("")
     bm.to_mesh(me)
     
-    #create a new collection for each building
+    #create a new collection for each new street, if the building has no street, add it to the unknown collection
     
     building_collection = osm_collection
     
-    if buildings[b]['street'] in bpy.data.collections:
-        building_collection = bpy.data.collections[buildings[b]['street']]
+    if buildings[b]['addr:street'] in bpy.data.collections:
+        building_collection = bpy.data.collections[buildings[b]['addr:street']]
     else:
-        building_collection = bpy.data.collections.new(buildings[b]['street'])
+        building_collection = bpy.data.collections.new(buildings[b]['addr:street'])
         osm_collection.children.link(building_collection)
     
-    ob = bpy.data.objects.new("Obj"+str(b), me)
+    ob = bpy.data.objects.new("Nr_"+buildings[b]['addr:housenumber']+"_"+buildings[b]['name'], me)
     ob.modifiers.new("Solidify", type='SOLIDIFY')
     ob.modifiers["Solidify"].thickness = h/10
+    
     building_collection.objects.link(ob)
+    
+    # check if building has a name an add it to a custom collection if it has one, otherwise add it to the unknown collection
+    if buildings[b]['name'] != "unknown":
+        if buildings[b]['name'] in bpy.data.collections:
+            building_collection = bpy.data.collections[buildings[b]['name']]
+        else:
+            building_collection = bpy.data.collections.new(buildings[b]['name'])
+            osm_named_buildings_collection.children.link(building_collection)
+        building_collection.objects.link(ob)
 
     # [start] Adding Glow to each object created, comment it out if not needed    
     matName = "Mater"+str(cnt)
     skymaterial = bpy.data.materials.new(matName)
     ob.active_material = skymaterial 
-    skymaterial.use_nodes = True
     nodes = skymaterial.node_tree.nodes
     
     nodes.clear()

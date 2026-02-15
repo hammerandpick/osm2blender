@@ -2,9 +2,11 @@
 
 ## Generating a city from osm map file
 
-* Get the .OSM file from http://openstreetmap.org/ (Search > Export) 
-* Copy and paste the script osm2blender.py in the Text Editor of Blender (See image below) 
-* Edit `filepath` to the exact path of .osm file you downloaded in first step.
+* Get the .OSM file from http://openstreetmap.org/ (Search > Export) and store it in %userfolder%/Downloads/map.osm
+* Copy and paste the script osm2blender.py in the Text Editor of Blender (See image below)
+* Optional: Edit `filepath` to the exact path of .osm file you downloaded in first step.
+* Optional: Modify "config" variables for more customization.
+** Scale x,y,z can be defined
 * And Run the script (Text > Run Script)
 
 ![screenshot after done](https://raw.githubusercontent.com/mkagenius/osm2blender/master/osm2blender.png)
